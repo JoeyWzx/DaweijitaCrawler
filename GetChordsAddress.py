@@ -13,45 +13,53 @@ import os
 BASE_FOLDER = '/Users/joeywang/Downloads/chords/'
 
 
-def crawlAll(pageUrl):
-    for i in range(1, 8):
+def crawlAll(pageUrl, keyword='*'):
+    lastPageUrl = html.fromstring(requests.get(pageUrl).text).xpath('//*[@class="page-nav"]/a[@class="last"]/@href')[0]
+    totalPage = lastPageUrl.split('/')[-1]
+    print('total page: ', totalPage)
+
+    for i in range(1, int(totalPage) + 1):
         pageInfo = requests.get(pageUrl + '/page/' + str(i)).text
         tree = html.fromstring(pageInfo)
         allLinksInOnePage = tree.xpath('//*[@class="widget-content"][1]/ul/li/h2/a/@href')
+        titles = tree.xpath('//*[@class="widget-content"][1]/ul/li/h2/a/text()')
 
-        for singlePage in allLinksInOnePage:
-            saveChords(singlePage)
+        for singlePage, title, j in zip(allLinksInOnePage, titles, range(1, len(allLinksInOnePage) + 1)):
+            if keyword == '*' or keyword.upper() in title.upper():
+                print('------------ ', title, '------------')
+                print('------------ index ', j, ' in page ', i, '------------')
+                saveScores(singlePage, title)
 
 
-def saveChords(singleUrl):
-    title, imageInfo = resolvePage(singleUrl)
-    filePath = BASE_FOLDER + title.replace('/', '_')
-    mkdir(filePath)
+def saveScores(singleUrl, title):
+    allScoreLinksOfOneSong = resolvePage(singleUrl)
 
-    for info in imageInfo:
-        saveImage(filePath, info)
+    if not allScoreLinksOfOneSong:
+        print('No scores in this song')
+
+    for imageLink in allScoreLinksOfOneSong:
+        data = getImageData(imageLink)
+
+        if data is not None:
+            filePath = BASE_FOLDER + title.replace('/', '_')
+            mkdir(filePath)
+            imageName = imageLink.split('/')[-1]
+
+            f = open(filePath + '/' + imageName, 'wb')
+            f.write(data)
+            f.close()
 
 
 def resolvePage(singleUrl):
     pageInfo = requests.get(singleUrl).text
     tree = html.fromstring(pageInfo)
     imageInfo = tree.xpath('//*[@class="highslide-image"]/@href')
-    title = tree.xpath('//h1[@class="post-title"]/text()')[0]
-    return title, imageInfo
 
-
-def saveImage(path, imageUrl):
-    data = getImageData(imageUrl)
-
-    if data is not None:
-        imageName = imageUrl.split('/')[-1]
-        f = open(path + '/' + imageName, 'wb')
-        f.write(data)
-        f.close()
+    return imageInfo
 
 
 def getImageData(imageUrl):
-    print('try to get image of: \'' + imageUrl + '\'')
+    print('image link: \'' + imageUrl + '\'')
     try:
         quote = parse.quote(imageUrl, safe='/:?=')
         return request.urlopen(quote).read()
@@ -62,13 +70,10 @@ def getImageData(imageUrl):
 
 def mkdir(path):
     exists = os.path.exists(path)
+
     if not exists:
-        print('create folder', path)
         os.mkdir(path)
 
 
 if __name__ == '__main__':
-    # saveChords('http://www.daweijita.com/78177.html')
-    print(crawlAll('http://www.daweijita.com/video_lesson'))
-    # saveImage('/Users/joeywang/Downloads/chords/【￥49】《大伟流行弹唱精选吉他谱集》',
-    #           'http://cdn.daweijita.com/2016/12/5周年书籍宝贝页面_03.gif')
+    crawlAll('http://www.daweijita.com/video_lesson', 'hey hey')
